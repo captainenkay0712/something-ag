@@ -1,0 +1,25 @@
+{
+  "name": "aggregator",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.45.2",
+    "@pythnetwork/pyth-sui-js": "^2.4.0",
+    "@types/bn.js": "^5.2.0",
+    "@types/json-bigint": "^1.0.4",
+    "bn.js": "^5.2.2",
+    "decimal.js": "^10.6.0",
+    "json-bigint": "^1.0.0"
+  },
+  "scripts": {
+    "dev": "RUST_LOG=off bun test --watch",
+    "dev:cetus": "bun run dev ./tests/aggregator"
+  }
+}

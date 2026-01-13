@@ -44,6 +44,223 @@ aggregator/
 └── tests/                        # Test suites
 ```
 
+### Core Contract Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Router
+    participant DEX1 as DEX Module 1
+    participant DEX2 as DEX Module 2
+    participant Protocol as External Protocol
+    
+    User->>Router: new_swap_context(input_coin, params)
+    activate Router
+    Router->>Router: Create SwapContext
+    Router->>Router: Store input balance in Bag
+    
+    Router->>DEX1: swap(swap_ctx, pool_params)
+    activate DEX1
+    DEX1->>Router: take_balance(amount)
+    Router-->>DEX1: Balance<CoinA>
+    DEX1->>Protocol: Execute swap
+    Protocol-->>DEX1: Balance<CoinB>
+    DEX1->>Router: merge_balance(output)
+    DEX1->>Router: emit_swap_event()
+    deactivate DEX1
+    
+    Router->>DEX2: swap(swap_ctx, pool_params)
+    activate DEX2
+    DEX2->>Router: take_balance(amount)
+    Router-->>DEX2: Balance<CoinB>
+    DEX2->>Protocol: Execute swap
+    Protocol-->>DEX2: Balance<CoinC>
+    DEX2->>Router: merge_balance(output)
+    DEX2->>Router: emit_swap_event()
+    deactivate DEX2
+    
+    Router->>Router: confirm_swap()
+    Router->>Router: Check slippage
+    Router->>Router: Deduct fees
+    Router->>Router: Emit ConfirmSwapEvent
+    Router-->>User: Coin<CoinC>
+    deactivate Router
+```
+
+### SwapContext State Management
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created: new_swap_context()
+    
+    Created --> Processing: First DEX swap
+    
+    state Processing {
+        [*] --> TakeBalance
+        TakeBalance --> ExecuteSwap
+        ExecuteSwap --> MergeBalance
+        MergeBalance --> EmitEvent
+        EmitEvent --> [*]
+    }
+    
+    Processing --> Processing: Next DEX swap
+    Processing --> Confirming: All swaps done
+    
+    state Confirming {
+        [*] --> CheckSlippage
+        CheckSlippage --> DeductFees
+        DeductFees --> EmitConfirmEvent
+        EmitConfirmEvent --> [*]
+    }
+    
+    Confirming --> [*]: confirm_swap()
+    
+    note right of Processing
+        SwapContext.balances updated
+        after each swap
+    end note
+    
+    note right of Confirming
+        Final validation and
+        fee processing
+    end note
+```
+
+### Adding New DEX Protocol
+
+```mermaid
+graph LR
+    subgraph "Step 1: Move Contract"
+        A1[Create new_dex.move]
+        A2[Implement swap function]
+        A3[Use router helpers]
+        A1 --> A2 --> A3
+    end
+    
+    subgraph "Step 2: TypeScript Client"
+        B1[Create NewDexRouter class]
+        B2[Implement DexRouter interface]
+        B3[Build moveCall]
+        B1 --> B2 --> B3
+    end
+    
+    subgraph "Step 3: Integration"
+        C1[Register in AggregatorClient]
+        C2[Add to Move.toml dependencies]
+        C3[Update API parser]
+        C1 --> C2 --> C3
+    end
+    
+    subgraph "Step 4: Testing"
+        D1[Write unit tests]
+        D2[Test integration]
+        D3[Deploy and verify]
+        D1 --> D2 --> D3
+    end
+    
+    A3 --> B1
+    B3 --> C1
+    C3 --> D1
+```
+
+### Contract Module Structure
+
+```mermaid
+classDiagram
+    class Router {
+        +SwapContext
+        +ConfirmSwapEvent
+        +SwapEvent
+        +new_swap_context()
+        +confirm_swap()
+        +take_balance()
+        +merge_balance()
+        +emit_swap_event()
+        +transfer_balance()
+    }
+    
+    class AggregatorErrors {
+        +E_AMOUNT_OUT_SLIPPAGE_CHECK_FAILED
+        +E_AMOUNT_IN_SLIPPAGE_CHECK_FAILED
+        +E_INSUFFICIENT_BALANCE
+        +E_ZERO_AMOUNT
+        +amount_out_slippage_check_failed()
+        +amount_in_slippage_check_failed()
+    }
+    
+    class CetusIntegration {
+        +swap()
+        +swap_a2b()
+        +swap_b2a()
+    }
+    
+    class BluefinIntegration {
+        +swap()
+        +swap_a2b()
+        +swap_b2a()
+    }
+    
+    class NewDEXIntegration {
+        +swap()
+        +internal_swap()
+    }
+    
+    Router <|-- CetusIntegration : uses
+    Router <|-- BluefinIntegration : uses
+    Router <|-- NewDEXIntegration : uses
+    CetusIntegration ..> AggregatorErrors : validates
+    BluefinIntegration ..> AggregatorErrors : validates
+    NewDEXIntegration ..> AggregatorErrors : validates
+    
+    note for Router "Core routing logic\nBalance management\nEvent emission"
+    note for CetusIntegration "Cetus CLMM\nintegration"
+    note for BluefinIntegration "Bluefin Spot\nintegration"
+    note for NewDEXIntegration "Template for\nnew protocols"
+```
+
+### Data Flow Architecture
+
+```mermaid
+flowchart TD
+    Start([User initiates swap]) --> Input[Input: Coin A]
+    
+    Input --> CreateContext[Create SwapContext]
+    CreateContext --> StoreBag[Store balance in Bag]
+    
+    StoreBag --> Route{Multi-hop route?}
+    
+    Route -->|Single| DEX1[DEX Module 1]
+    Route -->|Multiple| DEX1
+    
+    DEX1 --> Take1[take_balance from context]
+    Take1 --> Swap1[Execute swap on Protocol 1]
+    Swap1 --> Merge1[merge_balance to context]
+    Merge1 --> Event1[emit_swap_event]
+    
+    Event1 --> More{More hops?}
+    
+    More -->|Yes| DEX2[DEX Module 2]
+    DEX2 --> Take2[take_balance from context]
+    Take2 --> Swap2[Execute swap on Protocol 2]
+    Swap2 --> Merge2[merge_balance to context]
+    Merge2 --> Event2[emit_swap_event]
+    Event2 --> More
+    
+    More -->|No| Confirm[confirm_swap]
+    
+    Confirm --> Validate[Validate slippage]
+    Validate --> Pass{Pass?}
+    
+    Pass -->|Yes| Fees[Deduct fees]
+    Pass -->|No| Error[Abort with error]
+    
+    Fees --> FinalEvent[Emit ConfirmSwapEvent]
+    FinalEvent --> Output[Output: Coin C]
+    Output --> End([Return to user])
+    
+    Error --> End
+```
+
 ## Installation
 
 ### Prerequisites
@@ -224,41 +441,404 @@ describe('Swap router', () => {
 
 ### Add New DEX Integration
 
-1. **Create Move module** in `packages/aggregator/sources/routers/`:
+Follow these steps to integrate a new DEX protocol into the aggregator:
+
+#### Step 1: Create Move Contract Module
+
+Create `packages/aggregator/sources/routers/kriya.move`:
 
 ```move
-module aggregator::new_dex {
+module aggregator::kriya {
+    use sui::balance;
+    use sui::clock::Clock;
+    use sui::object;
+    
+    use kriya_clmm::config::GlobalConfig;
+    use kriya_clmm::pool::{Self, Pool};
+    
     use aggregator::router::{Self, SwapContext};
     
+    /// Constants for price limits
+    const MIN_SQRT_PRICE: u128 = 4295048016;
+    const MAX_SQRT_PRICE: u128 = 79226673515401279992447579055;
+    
+    /// Main swap entry point
     public fun swap<CoinA, CoinB>(
         swap_ctx: &mut SwapContext,
-        // ... DEX-specific parameters
+        config: &GlobalConfig,
+        pool: &mut Pool<CoinA, CoinB>,
+        a_to_b: bool,
+        amount_in: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
     ) {
-        // Implementation
+        if (a_to_b) {
+            swap_a2b<CoinA, CoinB>(swap_ctx, config, pool, amount_in, clock, ctx);
+        } else {
+            swap_b2a<CoinA, CoinB>(swap_ctx, config, pool, amount_in, clock, ctx);
+        }
+    }
+    
+    /// Internal swap A to B
+    fun swap_a2b<CoinA, CoinB>(
+        swap_ctx: &mut SwapContext,
+        config: &GlobalConfig,
+        pool: &mut Pool<CoinA, CoinB>,
+        amount_in: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // 1. Take balance from swap context
+        let balance_in = router::take_balance<CoinA>(swap_ctx, amount_in);
+        let actual_amount_in = balance::value(&balance_in);
+        
+        // Guard against zero amounts
+        if (actual_amount_in == 0) {
+            balance::destroy_zero(balance_in);
+            return
+        };
+        
+        // 2. Execute DEX-specific swap
+        let (balance_a_remaining, balance_b_out) = pool::swap<CoinA, CoinB>(
+            clock,
+            config,
+            pool,
+            balance_in,
+            balance::zero<CoinB>(),
+            true,                    // a2b direction
+            true,                    // by_amount_in
+            actual_amount_in,        // amount
+            0,                       // amount_limit (no limit for output)
+            MIN_SQRT_PRICE          // sqrt_price_limit
+        );
+        
+        let remaining_amount = balance::value(&balance_a_remaining);
+        let amount_out = balance::value(&balance_b_out);
+        
+        // 3. Handle remaining balance
+        if (amount_in == router::max_amount_in()) {
+            // If using max amount, transfer remainder to user
+            router::transfer_balance<CoinA>(balance_a_remaining, ctx.sender(), ctx);
+        } else {
+            // Otherwise merge back to context
+            router::merge_balance<CoinA>(swap_ctx, balance_a_remaining);
+        };
+        
+        // 4. Merge output balance to context
+        router::merge_balance<CoinB>(swap_ctx, balance_b_out);
+        
+        // 5. Emit swap event
+        router::emit_swap_event<CoinA, CoinB>(
+            swap_ctx,
+            b"KRIYA",                        // DEX name
+            object::id(pool),                // Pool ID
+            actual_amount_in - remaining_amount,  // Actual amount used
+            amount_out,                      // Amount received
+            remaining_amount                 // Amount remaining
+        );
+    }
+    
+    /// Internal swap B to A (similar pattern)
+    fun swap_b2a<CoinA, CoinB>(
+        swap_ctx: &mut SwapContext,
+        config: &GlobalConfig,
+        pool: &mut Pool<CoinA, CoinB>,
+        amount_in: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        // Same pattern as swap_a2b but with reversed coins
+        let balance_in = router::take_balance<CoinB>(swap_ctx, amount_in);
+        let actual_amount_in = balance::value(&balance_in);
+        
+        if (actual_amount_in == 0) {
+            balance::destroy_zero(balance_in);
+            return
+        };
+        
+        let (balance_a_out, balance_b_remaining) = pool::swap<CoinA, CoinB>(
+            clock,
+            config,
+            pool,
+            balance::zero<CoinA>(),
+            balance_in,
+            false,                   // b2a direction
+            true,
+            actual_amount_in,
+            0,
+            MAX_SQRT_PRICE
+        );
+        
+        let remaining_amount = balance::value(&balance_b_remaining);
+        let amount_out = balance::value(&balance_a_out);
+        
+        if (amount_in == router::max_amount_in()) {
+            router::transfer_balance<CoinB>(balance_b_remaining, ctx.sender(), ctx);
+        } else {
+            router::merge_balance<CoinB>(swap_ctx, balance_b_remaining);
+        };
+        
+        router::merge_balance<CoinA>(swap_ctx, balance_a_out);
+        
+        router::emit_swap_event<CoinB, CoinA>(
+            swap_ctx,
+            b"KRIYA",
+            object::id(pool),
+            actual_amount_in - remaining_amount,
+            amount_out,
+            remaining_amount
+        );
     }
 }
 ```
 
-2. **Create TypeScript router** in `src/movecall/`:
+#### Step 2: Update Move.toml Dependencies
+
+Add the new DEX dependency to `packages/aggregator/Move.toml`:
+
+```toml
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet" }
+CetusClmm = { git = "https://github.com/CetusProtocol/cetus-clmm-interface.git", subdir = "sui/cetus_clmm", rev = "mainnet-v1.52.3", override = true }
+bluefin_spot = { git = "https://github.com/fireflyprotocol/bluefin-spot-contracts-public.git", subdir = ".", rev = "main" }
+# Add new DEX
+KriyaClmm = { git = "https://github.com/KriyaDEX/kriya-clmm.git", subdir = "contracts", rev = "mainnet" }
+
+[addresses]
+aggregator = "0x0"
+cetus_clmm = "0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb"
+# Add DEX address if needed
+kriya_clmm = "0x..." 
+```
+
+#### Step 3: Create TypeScript Router Class
+
+Create `src/movecall/kriya.ts`:
 
 ```typescript
-class NewDexRouter implements DexRouter {
+import {
+    Transaction,
+    TransactionObjectArgument,
+} from "@mysten/sui/transactions"
+import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils"
+import { DexRouter, Extends } from "./index"
+import * as Constants from "../const"
+import { Env } from "../config"
+import { FlattenedPath } from "../types/shared"
+
+class KriyaRouter implements DexRouter {
+    private readonly globalConfig: string
+
+    constructor(env: Env) {
+        if (env !== Env.Mainnet) {
+            throw new Error("Kriya only supported on mainnet")
+        }
+        // Set the GlobalConfig object ID for the DEX
+        this.globalConfig = "0x..." // Kriya's GlobalConfig address
+    }
+
     swap(
         txb: Transaction,
         flattenedPath: FlattenedPath,
+        swapContext: TransactionObjectArgument,
+        _extends?: Extends
+    ): void {
+        const swapData = this.prepareSwapData(flattenedPath)
+        this.executeSwapContract(txb, swapData, swapContext)
+    }
+
+    private prepareSwapData(flattenedPath: FlattenedPath) {
+        if (flattenedPath.path.publishedAt == null) {
+            throw new Error("Kriya not set publishedAt")
+        }
+
+        const path = flattenedPath.path
+        const [coinAType, coinBType] = path.direction
+            ? [path.from, path.target]
+            : [path.target, path.from]
+
+        // Use MAX_AMOUNT_IN for intermediate tokens on their last usage
+        const amountIn = flattenedPath.isLastUseOfIntermediateToken
+            ? Constants.AGGREGATOR_CONFIG.MAX_AMOUNT_IN
+            : path.amountIn
+
+        return {
+            coinAType,
+            coinBType,
+            direction: path.direction,
+            amountIn,
+            publishedAt: path.publishedAt!,
+            poolId: path.id,
+        }
+    }
+
+    private executeSwapContract(
+        txb: Transaction,
+        swapData: {
+            coinAType: string
+            coinBType: string
+            direction: boolean
+            amountIn: string
+            publishedAt: string
+            poolId: string
+        },
         swapContext: TransactionObjectArgument
-    ) {
-        // Build move call
+    ): void {
+        const args = [
+            swapContext,
+            txb.object(this.globalConfig),
+            txb.object(swapData.poolId),
+            txb.pure.bool(swapData.direction),
+            txb.pure.u64(swapData.amountIn),
+            txb.object(SUI_CLOCK_OBJECT_ID),
+        ]
+
+        txb.moveCall({
+            target: `${swapData.publishedAt}::kriya::swap`,
+            typeArguments: [swapData.coinAType, swapData.coinBType],
+            arguments: args,
+        })
+    }
+}
+
+export { KriyaRouter }
+```
+
+#### Step 4: Register in AggregatorClient
+
+Update `src/client.ts`:
+
+```typescript
+import { KriyaRouter } from "./movecall/kriya"
+
+// Add constant
+export const KRIYA = "KRIYA"
+
+export const ALL_DEXES = [
+    CETUS,
+    BLUEFIN,
+    KRIYA,  // Add here
+]
+
+// In newDexRouter method:
+newDexRouter(
+    provider: string,
+    pythPriceIDs: Map<string, string>,
+    partner?: string
+): DexRouter {
+    switch (provider) {
+        case CETUS:
+            return new CetusRouter(this.env, partner)
+        case BLUEFIN:
+            return new BluefinRouter(this.env)
+        case KRIYA:
+            return new KriyaRouter(this.env)  // Add here
+        default:
+            throw new Error(`Unsupported DEX: ${provider}`)
     }
 }
 ```
 
-3. **Register in client**:
+#### Step 5: Update API Parser
+
+Update `src/api.ts` to handle the new protocol in responses:
 
 ```typescript
-case 'NEW_DEX':
-    return new NewDexRouter(this.env)
+const allPaths: Path[] = data.routes.flatMap((route: any) =>
+    route.path.map((p: any) => {
+        let published_at: string;
+
+        switch (p.provider) {
+            case "CETUS":
+                published_at = "0x721d950e57259cd97d41010887ab502ee7753b0a3deb4b6a80099aad0c833928";
+                break;
+            case "BLUEFIN":
+                published_at = "0x4e7c4ba436f8fd5b3c6bb514880ccd11c5109c83c45b5e037394b94204dbbb80";
+                break;
+            case "KRIYA":  // Add new case
+                published_at = "0x...";  // Your deployed aggregator address
+                break;
+            default:
+                throw new Error(`Provider not supported: ${p.provider}`);
+        }
+
+        return { ...p, published_at };
+    })
+);
 ```
+
+#### Step 6: Add Tests
+
+Create `tests/aggregator/kriya.test.ts`:
+
+```typescript
+import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test';
+import { TestFixture } from '../fixture';
+import { M_USDC, M_SUI } from '../test_data.test';
+
+setDefaultTimeout(30_000);
+
+describe('Kriya Router', () => {
+    let fixture: TestFixture;
+
+    beforeAll(async () => {
+        fixture = new TestFixture();
+        await fixture.setup();
+    })
+
+    describe('Single swap', () => {
+        test('SUI -> USDC', async () => {
+            await fixture.testDexRouter(
+                'KRIYA',
+                M_SUI,
+                M_USDC,
+                '1000000000',
+                true
+            )
+        });
+    })
+})
+```
+
+#### Step 7: Build and Test
+
+```bash
+# Build Move contracts
+cd packages/aggregator
+sui move build
+
+# Run tests
+cd ../..
+bun test tests/aggregator/kriya.test.ts
+
+# Test integration
+bun run dev:cetus
+```
+
+#### Integration Checklist
+
+- [ ] Move contract created in `sources/routers/`
+- [ ] Dependencies added to `Move.toml`
+- [ ] TypeScript router class implements `DexRouter`
+- [ ] Router registered in `AggregatorClient`
+- [ ] API parser updated
+- [ ] Tests written and passing
+- [ ] Documentation updated
+- [ ] Constants defined (addresses, limits)
+- [ ] Error handling implemented
+- [ ] Events properly emitted
+
+#### Common Patterns
+
+All DEX integrations should follow this pattern:
+
+1. **Take balance** from `SwapContext` using `router::take_balance`
+2. **Execute swap** using the DEX's native protocol
+3. **Handle remainders** - transfer to user if max amount, else merge back
+4. **Merge output** to context using `router::merge_balance`
+5. **Emit event** using `router::emit_swap_event`
+
+This ensures consistency and proper state management across all DEX integrations.
 
 ## Configuration
 

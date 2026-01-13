@@ -1,11 +1,11 @@
-module stormlink_aggregator::bluefin {
+module aggregator::bluefin {
     use sui::balance;
     use sui::clock::Clock;
     
     use bluefin_spot::config::GlobalConfig;
     use bluefin_spot::pool::{Self, Pool};
     
-    use stormlink_aggregator::router::{Self, SwapContext};
+    use aggregator::router::{Self, SwapContext};
     
     const MIN_SQRT_PRICE: u128 = 4295048017;
     

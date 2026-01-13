@@ -1,10 +1,10 @@
-# StormLink Aggregator
+# Aggregator
 
 A high-performance DEX aggregator for the Sui blockchain that finds optimal swap routes across multiple decentralized exchanges.
 
 ## Overview
 
-StormLink Aggregator is a sophisticated routing system that aggregates liquidity from multiple DEX protocols on Sui to provide users with the best swap rates. The project consists of:
+Aggregator is a sophisticated routing system that aggregates liquidity from multiple DEX protocols on Sui to provide users with the best swap rates. The project consists of:
 
 - **Move Smart Contracts**: On-chain swap execution and routing logic
 - **TypeScript SDK**: Client library for interacting with the aggregator
@@ -24,7 +24,7 @@ StormLink Aggregator is a sophisticated routing system that aggregates liquidity
 ```
 aggregator/
 ├── packages/
-│   ├── stormlink-aggregator/     # Main Move package
+│   ├── aggregator/     # Main Move package
 │   │   ├── sources/
 │   │   │   ├── router.move       # Core routing logic
 │   │   │   ├── errors.move       # Error definitions
@@ -61,7 +61,7 @@ bun install
 ### Build Move Contracts
 
 ```bash
-cd packages/stormlink-aggregator
+cd packages/aggregator
 sui move build
 ```
 
@@ -126,7 +126,7 @@ const result = await client.client.signAndExecuteTransaction({
 
 ### Core Modules
 
-#### `stormlink_aggregator::router`
+#### `aggregator::router`
 
 Main routing module that manages swap context and execution flow.
 
@@ -142,7 +142,7 @@ Main routing module that manages swap context and execution flow.
 - `ConfirmSwapEvent`: Emitted on successful swap
 - `SwapEvent`: Emitted for each hop in route
 
-#### `stormlink_aggregator::cetus`
+#### `aggregator::cetus`
 
 Cetus CLMM integration module.
 
@@ -159,7 +159,7 @@ public fun swap<CoinA, CoinB>(
 )
 ```
 
-#### `stormlink_aggregator::bluefin`
+#### `aggregator::bluefin`
 
 Bluefin Spot integration module.
 
@@ -177,7 +177,7 @@ public fun swap<CoinA, CoinB>(
 
 ### Error Codes
 
-Defined in `stormlink_aggregator::aggregator_errors`:
+Defined in `aggregator::aggregator_errors`:
 
 - `E_AMOUNT_OUT_SLIPPAGE_CHECK_FAILED (1)`: Output amount below minimum
 - `E_AMOUNT_IN_SLIPPAGE_CHECK_FAILED (2)`: Input amount exceeds maximum
@@ -224,11 +224,11 @@ describe('Swap router', () => {
 
 ### Add New DEX Integration
 
-1. **Create Move module** in `packages/stormlink-aggregator/sources/routers/`:
+1. **Create Move module** in `packages/aggregator/sources/routers/`:
 
 ```move
-module stormlink_aggregator::new_dex {
-    use stormlink_aggregator::router::{Self, SwapContext};
+module aggregator::new_dex {
+    use aggregator::router::{Self, SwapContext};
     
     public fun swap<CoinA, CoinB>(
         swap_ctx: &mut SwapContext,
@@ -279,7 +279,7 @@ SUI_PRIVATE_KEY=your-private-key
 
 ```toml
 [package]
-name = "StormLinkAggregator"
+name = "Aggregator"
 version = "0.0.1"
 
 [dependencies]
@@ -288,7 +288,7 @@ CetusClmm = { git = "https://github.com/CetusProtocol/cetus-clmm-sui.git", subdi
 bluefin_spot = { git = "https://github.com/blue-fin/bluefin-spot.git", subdir = "contracts/clob_v2", rev = "mainnet" }
 
 [addresses]
-stormlink_aggregator = "0x0"
+aggregator = "0x0"
 ```
 
 ## API Reference
@@ -389,7 +389,7 @@ Apache License 2.0
 
 ## Contact
 
-- GitHub: [captainenkay0712/stormlink-aggregator](https://github.com/captainenkay0712/stormlink-aggregator)
+- GitHub: [captainenkay0712/aggregator](https://github.com/captainenkay0712/aggregator)
 
 ## Acknowledgments
 

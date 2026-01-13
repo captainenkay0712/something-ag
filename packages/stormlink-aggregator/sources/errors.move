@@ -1,4 +1,4 @@
-module stormlink_aggregator::aggregator_errors {
+module aggregator::aggregator_errors {
     const E_AMOUNT_OUT_SLIPPAGE_CHECK_FAILED: u64 = 1;
     const E_REMAINS_BALANCE: u64 = 2;
     const E_AMOUNT_IN_IS_ZERO: u64 = 3;

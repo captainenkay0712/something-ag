@@ -1,4 +1,4 @@
-module stormlink_aggregator::cetus {
+module aggregator::cetus {
     use sui::balance::{Self, Balance};
     use sui::clock::Clock;
     
@@ -7,7 +7,7 @@ module stormlink_aggregator::cetus {
     use cetus_clmm::partner::Partner;
     use cetus_clmm::tick_math;
     
-    use stormlink_aggregator::router::{Self, SwapContext};
+    use aggregator::router::{Self, SwapContext};
     
     const DEFAULT_PARTNER_ID: address = @0x0e753adcf1dbf8107f599046ff6e1635220a4ec6f010f68a9535413efe5e4f74;
 

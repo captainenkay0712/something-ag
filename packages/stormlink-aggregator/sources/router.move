@@ -1,4 +1,4 @@
-module stormlink_aggregator::router {
+module aggregator::router {
     use std::string::String;
     use std::type_name::{Self, TypeName};
     
@@ -7,7 +7,7 @@ module stormlink_aggregator::router {
     use sui::coin::{Self, Coin};
     use sui::event;
     
-    use stormlink_aggregator::aggregator_errors;
+    use aggregator::aggregator_errors;
 
     /// Maximum fee rate: 10% (100000 / 1000000)
     const MAX_FEE_RATE: u32 = 100000;
